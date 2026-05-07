@@ -6,12 +6,16 @@ MetaSonic is a research project exploring compiler architecture for real-time
 signal graphs with deterministic execution semantics. This repository —
 `metasonic-bridge` — is a prototype implementation of its core pipeline:
 representing audio graphs in a strongly typed IR, stripping redundant nodes,
-and marshaling the result across a thin FFI boundary into C++20.
+and marshaling the result across a thin FFI boundary into C++.
 
-The source is documented with Haddock comments and cross-reference notes that go
-into significantly more detail than this file. For a conceptual picture of the
+The source is documented with Haddock comments and cross-reference notes that
+cover significantly more detail than this file. For a conceptual picture of the
 system, read the code in pipeline order starting from
 [`src/MetaSonic/Types.hs`](./src/MetaSonic/Types.hs).
+
+See [ROADMAP.md](./ROADMAP.md) for current progress and next planned steps.
+For deeper design discussion and reasoning, see the
+[blog](https://smoge.github.io/metasonic-bridge).
 
 > *Don't run the graph. Compile it.*
 
@@ -84,28 +88,58 @@ keeping their architectural modularity.
 
 ## Quick start
 
-Requirements: GHC (tested with GHC 9.10.3 / LTS 24.34), Stack, C++20 compiler
-(GCC or Clang), PortAudio (must be installed separately), and q_io (included as
-a git submodule).
+### Requirements
+
+- **GHC** — tested with 9.10.3
+- **Stack** — for deterministic dependency management (resolver: lts-24.34)
+- **C++20 compiler** — GCC or Clang
+- **PortAudio** — must be installed separately on your system
+- **Q** (C++20 library) — infra and q_lib modules, included as git
+  submodules
+
+### Build and run
 
 ```sh
+git clone --recurse-submodules https://github.com/smoge/metasonic-bridge.git
+cd metasonic-bridge
 stack build
 stack exec metasonic-bridge
 ```
 
 ---
 
-## Syntax example
+## SynthGraph syntax 
 
 ```haskell
+simpleGraph :: SynthGraph
 simpleGraph = runSynth $ do
   osc <- sinOsc 440.0 0.0
   out 0 osc
+
+chainGraph  :: SynthGraph
+chainGraph = runSynth $ do
+  osc <- sinOsc 440.0 0.0
+  g   <- gain osc 0.5
+  out 0 g
+
+fanOutGraph :: SynthGraph 
+fanOutGraph = runSynth $ do
+  osc <- sinOsc 440.0 0.0
+  g1  <- gain osc 0.3
+  g2  <- gain osc 0.7
+  out 0 g1
+  out 1 g2
 ```
 
-This builds a simple chain (`SinOsc → Out`), but what runs is not this
-structure directly — it's a compiled, validated, topologically ordered version
-of it.
+This builds three small graphs — a minimal oscillator (`SinOsc → Out`), a simple
+chain (`SinOsc → Gain → Out`), and a fan-out (`SinOsc → Gain × 2 → Out × 2`) —
+but what actually runs is a compiled, validated, topologically ordered version
+of each.
+
+This syntax belongs to `metasonic-bridge` — the compilation layer that
+constructs IR nodes and lowers them to C++. The authoring DSL in
+`metasonic-core` sits above this, offering alternative interfaces while compiling
+down to the same bridge primitives.
 
 ---
 
